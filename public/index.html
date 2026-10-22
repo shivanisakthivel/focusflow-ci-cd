@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Smart Task Manager</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f4f6fb;
+            color: #20243a;
+        }
+        header {
+            background: #20243a;
+            color: white;
+            padding: 24px 7%;
+        }
+        header h1 { margin: 0 0 8px; }
+        header p { margin: 0; color: #c5c9dc; }
+        main { max-width: 1000px; margin: 30px auto; padding: 0 20px; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .card, .task-panel {
+            background: white;
+            border-radius: 14px;
+            padding: 22px;
+            box-shadow: 0 4px 18px #1820440c;
+        }
+        .card span { color: #727891; }
+        .card h2 { font-size: 30px; margin: 12px 0 0; }
+        .task-panel h2 { margin-top: 0; }
+        form { display: flex; gap: 10px; margin-bottom: 20px; }
+        input {
+            flex: 1;
+            min-width: 0;
+            padding: 13px;
+            border: 1px solid #d9ddec;
+            border-radius: 8px;
+            font-size: 15px;
+        }
+        button {
+            border: 0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            background: #6658e8;
+            color: white;
+            font-weight: bold;
+        }
+        ul { padding: 0; list-style: none; }
+        li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 0;
+            border-bottom: 1px solid #edf0f6;
+        }
+        li span { flex: 1; overflow-wrap: anywhere; }
+        li.done span { text-decoration: line-through; color: #8c92a6; }
+        li button { padding: 8px 10px; background: #e9e7ff; color: #5143c8; }
+        li button.delete { background: #ffebeb; color: #bd3030; }
+        .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+        .filters button { background: #ecebfa; color: #5143c8; }
+        .filters button.active { background: #6658e8; color: white; }
+        #empty { color: #727891; text-align: center; padding: 20px; }
+        @media (max-width: 600px) {
+            .stats { grid-template-columns: 1fr; }
+            form { flex-wrap: wrap; }
+            form input { flex-basis: 100%; }
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>✦ FocusFlow</h1>
+    <p>Your goals, organized. Your progress, visible.</p>
+</header>
+
+<main>
+    <section class="stats">
+        <div class="card"><span>Total Tasks</span><h2 id="total">0</h2></div>
+        <div class="card"><span>Completed</span><h2 id="completed">0</h2></div>
+        <div class="card"><span>Remaining</span><h2 id="remaining">0</h2></div>
+    </section>
+
+    <section class="task-panel">
+        <h2>My Tasks</h2>
+        <form id="taskForm">
+            <input id="taskInput" placeholder="What do you want to accomplish?" required maxlength="150">
+            <button type="submit">+ Add Task</button>
+        </form>
+
+        <div class="filters">
+            <button type="button" class="active" data-filter="all">All</button>
+            <button type="button" data-filter="active">Active</button>
+            <button type="button" data-filter="completed">Completed</button>
+        </div>
+
+        <ul id="taskList"></ul>
+        <p id="empty">No tasks here yet. Add your first task!</p>
+    </section>
+</main>
+
+<script>
+    const form = document.getElementById('taskForm');
+    const input = document.getElementById('taskInput');
+    const list = document.getElementById('taskList');
+    const empty = document.getElementById('empty');
+    let tasks = JSON.parse(localStorage.getItem('focusflow-tasks') || '[]');
+    let filter = 'all';
+
+    function render() {
+        list.replaceChildren();
+        const visible = tasks.filter(task =>
+            filter === 'all' ||
+            (filter === 'active' && !task.done) ||
+            (filter === 'completed' && task.done)
+        );
+
+        visible.forEach(task => {
+            const item = document.createElement('li');
+            if (task.done) item.classList.add('done');
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = task.done;
+            checkbox.setAttribute('aria-label', 'Mark task complete');
+            checkbox.addEventListener('change', () => {
+                task.done = checkbox.checked;
+                save();
+            });
+
+            const label = document.createElement('span');
+            label.textContent = task.text;
+
+            const toggle = document.createElement('button');
+            toggle.textContent = task.done ? 'Undo' : 'Done';
+            toggle.addEventListener('click', () => {
+                task.done = !task.done;
+                save();
+            });
+
+            const remove = document.createElement('button');
+            remove.textContent = 'Delete';
+            remove.className = 'delete';
+            remove.addEventListener('click', () => {
+                tasks = tasks.filter(t => t.id !== task.id);
+                save();
+            });
+
+            item.append(checkbox, label, toggle, remove);
+            list.appendChild(item);
+        });
+
+        document.getElementById('total').textContent = tasks.length;
+        document.getElementById('completed').textContent =
+            tasks.filter(t => t.done).length;
+        document.getElementById('remaining').textContent =
+            tasks.filter(t => !t.done).length;
+
+        empty.hidden = visible.length > 0;
+        empty.textContent = tasks.length === 0
+            ? 'No tasks yet. Add your first task!'
+            : 'No tasks match this filter.';
+
+        document.querySelectorAll('[data-filter]').forEach(button => {
+            button.classList.toggle('active', button.dataset.filter === filter);
+        });
+    }
+
+    function save() {
+        localStorage.setItem('focusflow-tasks', JSON.stringify(tasks));
+        render();
+    }
+
+    form.addEventListener('submit', event => {
+        event.preventDefault();
+        const text = input.value.trim();
+        if (!text) return;
+        tasks.push({ id: Date.now() + Math.random(), text, done: false });
+        input.value = '';
+        save();
+    });
+
+    document.querySelectorAll('[data-filter]').forEach(button => {
+        button.addEventListener('click', () => {
+            filter = button.dataset.filter;
+            render();
+        });
+    });
+
+    render();
+</script>
+</body>
+</html>
